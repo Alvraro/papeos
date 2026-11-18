@@ -1,7 +1,7 @@
 package com.alvraro.papeos_backend;
 
-import java.text.SimpleDateFormat;
-import java.util.Date;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -39,6 +39,8 @@ class PapeosBackendApplicationTests {
 	@Autowired
 	private ComidaRepository comidaRepository;
 
+	private DateTimeFormatter dateFormatter = DateTimeFormatter.ISO_DATE;
+	
 	@AfterEach
 	void cleanUp() {
 		alimentoRepository.deleteAll();
@@ -58,7 +60,7 @@ class PapeosBackendApplicationTests {
 		return platoRepository.save(plato);
 	}
 
-	private Comida createTestComida(Date fecha, TipoComida tipo) {
+	private Comida createTestComida(LocalDate fecha, TipoComida tipo) {
 		Comida comida = new Comida();
 		comida.setFecha(fecha);
 		comida.setTipo(tipo);
@@ -350,11 +352,11 @@ class PapeosBackendApplicationTests {
 
 	@Test
 	void givenComidas_whenCreateComida_thenStatus200() throws Exception {
-		final String fechaString = "2026-11-10T10:00:00.000+00:00";
+		LocalDate fecha = LocalDate.parse("2026-11-10", dateFormatter);
 
 		mvc.perform(MockMvcRequestBuilders.post("/comidas/create")
 				.contentType(MediaType.APPLICATION_JSON)
-				.content("{\"fecha\":\"" + fechaString + "\",\"tipo\":\"comida\"}"))
+				.content("{\"fecha\":\"" + dateFormatter.format(fecha) + "\",\"tipo\":\"comida\"}"))
 				.andExpect(MockMvcResultMatchers.status().isOk())
 				.andExpect(MockMvcResultMatchers.content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
 				.andExpect(MockMvcResultMatchers.jsonPath("$.tipo").value("comida"));
@@ -362,7 +364,7 @@ class PapeosBackendApplicationTests {
 
 	@Test
 	void givenComidas_whenGetComidaById_thenStatus200() throws Exception {
-		Date fecha = new Date();
+		LocalDate fecha = LocalDate.parse("2026-11-10", dateFormatter);
 		Comida comida = createTestComida(fecha, TipoComida.comida);
 
 		mvc.perform(MockMvcRequestBuilders.get("/comidas/get/" + comida.getId())
@@ -382,41 +384,39 @@ class PapeosBackendApplicationTests {
 			.andExpect(MockMvcResultMatchers.status().isNotFound());
 	}
 
-	private String toIsoDate(Date date) {
-		SimpleDateFormat isoFormat = new SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss.SSSXXX");
-		isoFormat.setTimeZone(java.util.TimeZone.getTimeZone("UTC"));
-		return isoFormat.format(date);
-	}
-
 	@Test
 	void givenComidas_whenGetComidasByDateInterval_thenStatus200() throws Exception {
-		Date fecha1 = new Date(1700000000000L);
-		Date fecha2 = new Date(1700003600000L);
-		Date fecha3 = new Date(1700007200000L);
-		createTestComida(fecha1, TipoComida.comida);
-		createTestComida(fecha2, TipoComida.cena);
-		createTestComida(fecha3, TipoComida.comida);
+		String fecha1 = "2026-11-10";
+		String fecha2 = "2026-11-11";
+		String fecha3 = "2026-11-12";
+		Comida comida1 = createTestComida(LocalDate.parse(fecha1, dateFormatter), TipoComida.comida);
+		Comida comida2 = createTestComida(LocalDate.parse(fecha2, dateFormatter), TipoComida.cena);
+		createTestComida(LocalDate.parse(fecha3, dateFormatter), TipoComida.comida);
 
 		mvc.perform(MockMvcRequestBuilders.post("/comidas/get")
 				.contentType(MediaType.APPLICATION_JSON)
-				.param("desde", toIsoDate(fecha1))
-				.param("hasta", toIsoDate(fecha2)))
+				.param("desde", fecha1)
+				.param("hasta", fecha2))
 			.andExpect(MockMvcResultMatchers.status().isOk())
 			.andExpect(MockMvcResultMatchers.content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
-			.andExpect(MockMvcResultMatchers.jsonPath("$[0].tipo").value("comida"))
-			.andExpect(MockMvcResultMatchers.jsonPath("$[1].tipo").value("cena"));
+			.andExpect(MockMvcResultMatchers.jsonPath("$[0].tipo").value(comida1.getTipo().toString()))
+			.andExpect(MockMvcResultMatchers.jsonPath("$[0].id").value(comida1.getId()))
+			.andExpect(MockMvcResultMatchers.jsonPath("$[0].fecha").value(fecha1))
+			.andExpect(MockMvcResultMatchers.jsonPath("$[1].tipo").value(comida2.getTipo().toString()))
+			.andExpect(MockMvcResultMatchers.jsonPath("$[1].id").value(comida2.getId()))
+			.andExpect(MockMvcResultMatchers.jsonPath("$[1].fecha").value(fecha2))
+			.andExpect(MockMvcResultMatchers.jsonPath("$[2]").doesNotExist());
 	}
 
 	@Test
 	void givenComidas_whenUpdateComida_thenStatus200() throws Exception {
-		Date fecha = new Date();
-		Comida comida = createTestComida(fecha, TipoComida.comida);
+		String fecha = "2026-11-10";
+		Comida comida = createTestComida(LocalDate.parse(fecha, dateFormatter), TipoComida.comida);
 		comida.setTipo(TipoComida.cena);
-		String fechaJson = toIsoDate(comida.getFecha());
 
 		mvc.perform(MockMvcRequestBuilders.post("/comidas/update")
 				.contentType(MediaType.APPLICATION_JSON)
-				.content("{\"id\":" + comida.getId() + ",\"fecha\":\"" + fechaJson + "\",\"tipo\":\"" + comida.getTipo() + "\"}"))
+				.content("{\"id\":" + comida.getId() + ",\"fecha\":\"" + fecha + "\",\"tipo\":\"" + comida.getTipo() + "\"}"))
 			.andExpect(MockMvcResultMatchers.status().isOk())
 			.andExpect(MockMvcResultMatchers.content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
 			.andExpect(MockMvcResultMatchers.jsonPath("$.tipo").value("cena"))
@@ -427,14 +427,14 @@ class PapeosBackendApplicationTests {
 	void givenComidas_whenUpdateComidaWithNonExistingId_thenStatus404() throws Exception {
 		mvc.perform(MockMvcRequestBuilders.post("/comidas/update")
 				.contentType(MediaType.APPLICATION_JSON)
-				.content("{\"id\":999,\"fecha\":\"2026-11-10T10:00:00.000+00:00\",\"tipo\":\"cena\"}"))
+				.content("{\"id\":999,\"fecha\":\"2026-11-10\",\"tipo\":\"cena\"}"))
 			.andExpect(MockMvcResultMatchers.status().isNotFound());
 	}
 
 	@Test
 	void givenComidas_whenDeleteComida_thenStatus200() throws Exception {
-		Date fecha = new Date();
-		Comida comida = createTestComida(fecha, TipoComida.comida);
+		String fecha = "2026-11-10";
+		Comida comida = createTestComida(LocalDate.parse(fecha, dateFormatter), TipoComida.comida);
 
 		mvc.perform(MockMvcRequestBuilders.delete("/comidas/delete")
 				.contentType(MediaType.APPLICATION_JSON)

@@ -1,6 +1,6 @@
 package com.alvraro.papeos_backend.model;
 
-import java.util.Date;
+import java.time.LocalDate;
 import java.util.List;
 
 import jakarta.persistence.Column;
@@ -33,7 +33,7 @@ public class Comida {
 	Integer id;
 
 	@Column
-	Date fecha;
+	LocalDate fecha;
 	
 	@Column
 	@Enumerated(EnumType.STRING)

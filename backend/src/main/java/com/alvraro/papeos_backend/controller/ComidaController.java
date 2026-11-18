@@ -1,9 +1,10 @@
 package com.alvraro.papeos_backend.controller;
 
-import java.util.Date;
+import java.time.LocalDate;
 import java.util.List;
 
 import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -37,7 +38,9 @@ public class ComidaController {
 	}
 	
 	@PostMapping("/get")
-	public ResponseEntity<List<Comida>> getComidaByDateInterval(@RequestParam Date desde, @RequestParam Date hasta) {
+	public ResponseEntity<List<Comida>> getComidaByDateInterval(
+			@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE, fallbackPatterns = {"yyyy/MM/dd"}) LocalDate desde, 
+			@RequestParam @DateTimeFormat(iso = DateTimeFormat.ISO.DATE, fallbackPatterns = {"yyyy/MM/dd"}) LocalDate hasta) {
 		return ResponseEntity.ok(comidaRepository.findByFechaBetween(desde, hasta));
 	}
 
