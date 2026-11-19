@@ -234,8 +234,11 @@ async function saveMeal(row, dish) {
   const saved = await request(`${API.meals}/${oldMeal ? "update" : "create"}`, { method: "POST", body });
   meals = meals.filter((item) => !(String(item.fecha ?? "").slice(0, 10) === row.dataset.date &&
     String(item.tipoComida ?? item.tipo_comida ?? item.tipo ?? "").toLowerCase() === row.dataset.type));
-  meals.push(saved && typeof saved === "object" ? saved : {
-    ...body, id: oldMeal?.id, plato: dish
+  meals.push({
+    id: saved?.id ?? oldMeal?.id,
+    fecha: row.dataset.date,
+    tipo: row.dataset.type,
+    plato: dish
   });
   renderPlan();
 }

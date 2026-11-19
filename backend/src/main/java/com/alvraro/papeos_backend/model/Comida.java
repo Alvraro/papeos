@@ -30,14 +30,14 @@ import lombok.ToString;
 public class Comida {
 	@Id
 	@GeneratedValue(strategy = GenerationType.IDENTITY)
-	Integer id;
+	private Integer id;
 
 	@Column
-	LocalDate fecha;
+	private LocalDate fecha;
 	
 	@Column
 	@Enumerated(EnumType.STRING)
-	TipoComida tipo;
+	private TipoComida tipo;
 	
 	@ManyToMany
 	@JoinTable(

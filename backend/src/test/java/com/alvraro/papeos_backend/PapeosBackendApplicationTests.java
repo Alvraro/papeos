@@ -2,6 +2,7 @@ package com.alvraro.papeos_backend;
 
 import java.time.LocalDate;
 import java.time.format.DateTimeFormatter;
+import java.util.Arrays;
 
 import org.junit.jupiter.api.AfterEach;
 import org.junit.jupiter.api.Test;
@@ -430,9 +431,22 @@ class PapeosBackendApplicationTests {
 		String fecha1 = "2026-11-10";
 		String fecha2 = "2026-11-11";
 		String fecha3 = "2026-11-12";
+
+		Plato plato1 = createTestPlato("Plato Uno", "Descripcion plato uno");
+		Plato plato2 = createTestPlato("Plato Dos", "Descripcion plato dos");
+		Plato plato3 = createTestPlato("Plato Tres", "Descripcion plato tres");
+
 		Comida comida1 = createTestComida(LocalDate.parse(fecha1, dateFormatter), TipoComida.comida);
+		comida1.setPlatos(Arrays.asList(plato1, plato2));
+		comida1 = comidaRepository.save(comida1);
+
 		Comida comida2 = createTestComida(LocalDate.parse(fecha2, dateFormatter), TipoComida.cena);
-		createTestComida(LocalDate.parse(fecha3, dateFormatter), TipoComida.comida);
+		comida2.setPlatos(Arrays.asList(plato1, plato3));
+		comida2 = comidaRepository.save(comida2);
+
+		Comida comidaFueraIntervalo = createTestComida(LocalDate.parse(fecha3, dateFormatter), TipoComida.comida);
+		comidaFueraIntervalo.setPlatos(Arrays.asList(plato2, plato3));
+		comidaRepository.save(comidaFueraIntervalo);
 
 		mvc.perform(MockMvcRequestBuilders.post("/comidas/get")
 				.contentType(MediaType.APPLICATION_JSON)
@@ -443,9 +457,13 @@ class PapeosBackendApplicationTests {
 			.andExpect(MockMvcResultMatchers.jsonPath("$[0].tipo").value(comida1.getTipo().toString()))
 			.andExpect(MockMvcResultMatchers.jsonPath("$[0].id").value(comida1.getId()))
 			.andExpect(MockMvcResultMatchers.jsonPath("$[0].fecha").value(fecha1))
+			.andExpect(MockMvcResultMatchers.jsonPath("$[0].platos[0]").value(plato1.getNombre()))
+			.andExpect(MockMvcResultMatchers.jsonPath("$[0].platos[1]").value(plato2.getNombre()))
 			.andExpect(MockMvcResultMatchers.jsonPath("$[1].tipo").value(comida2.getTipo().toString()))
 			.andExpect(MockMvcResultMatchers.jsonPath("$[1].id").value(comida2.getId()))
 			.andExpect(MockMvcResultMatchers.jsonPath("$[1].fecha").value(fecha2))
+			.andExpect(MockMvcResultMatchers.jsonPath("$[1].platos[0]").value(plato1.getNombre()))
+			.andExpect(MockMvcResultMatchers.jsonPath("$[1].platos[1]").value(plato3.getNombre()))
 			.andExpect(MockMvcResultMatchers.jsonPath("$[2]").doesNotExist());
 	}
 

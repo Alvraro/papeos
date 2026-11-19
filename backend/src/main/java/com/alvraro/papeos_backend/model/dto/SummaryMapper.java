@@ -21,6 +21,7 @@ public interface SummaryMapper {
 	List<PlatoSummary> toPlatoSummaries(List<Plato> platos);
 
 	@Mapping(target = "tipo", expression = "java(mapTipo(comida.getTipo()))")
+	@Mapping(target = "platos", expression = "java(mapPlatos(comida.getPlatos()))")
 	ComidaSummary toComidaSummary(Comida comida);
 	List<ComidaSummary> toComidaSummaries(List<Comida> comidas);
 
@@ -30,5 +31,14 @@ public interface SummaryMapper {
 
 	default String mapTipo(TipoComida tipo) {
 		return tipo == null ? null : tipo.toString();
+	}
+	
+	default List<String> mapPlatos(List<Plato> platos) {
+		if (platos == null) {
+			return null;
+		}
+		return platos.stream()
+				.map(Plato::getNombre)
+				.toList();
 	}
 }
