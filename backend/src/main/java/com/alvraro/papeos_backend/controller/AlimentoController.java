@@ -2,6 +2,7 @@ package com.alvraro.papeos_backend.controller;
 
 import java.util.List;
 
+import org.mapstruct.factory.Mappers;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -12,6 +13,8 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import com.alvraro.papeos_backend.model.Alimento;
+import com.alvraro.papeos_backend.model.dto.AlimentoSummary;
+import com.alvraro.papeos_backend.model.dto.SummaryMapper;
 import com.alvraro.papeos_backend.repository.AlimentoRepository;
 
 @RestController
@@ -19,6 +22,8 @@ import com.alvraro.papeos_backend.repository.AlimentoRepository;
 public class AlimentoController {
 	@Autowired
 	private AlimentoRepository alimentoRepository;
+
+	private final SummaryMapper summaryMapper = Mappers.getMapper(SummaryMapper.class);
 
 	@PostMapping("/create")
 	public ResponseEntity<String> createAlimento(@RequestBody Alimento alimento) {
@@ -31,32 +36,32 @@ public class AlimentoController {
 	}
 
 	@PostMapping("/get")
-	public ResponseEntity<Alimento> getAlimentoById(@RequestParam Integer id) {
+	public ResponseEntity<AlimentoSummary> getAlimentoById(@RequestParam Integer id) {
 		return alimentoRepository
 			.findById(id)
-			.map(ResponseEntity::ok)
+			.map(alimento -> ResponseEntity.ok(summaryMapper.toAlimentoSummary(alimento)))
 			.orElseGet(() -> ResponseEntity.notFound().build());
 	}
 
 	@PostMapping("/get-all")
-	public ResponseEntity<List<Alimento>> getAllAlimentos() {
-		return ResponseEntity.ok(alimentoRepository.findAll());
+	public ResponseEntity<List<AlimentoSummary>> getAllAlimentos() {
+		return ResponseEntity.ok(summaryMapper.toAlimentoSummaries(alimentoRepository.findAll()));
 	}
 	
 	@PostMapping("/search")
-	public ResponseEntity<List<Alimento>> findByNombreContainingIgnoreCase(@RequestBody(required = false) String partialName) {
+	public ResponseEntity<List<AlimentoSummary>> findByNombreContainingIgnoreCase(@RequestBody(required = false) String partialName) {
 		if(partialName == null || partialName.isBlank())
-			return ResponseEntity.ok(alimentoRepository.findAll());
+			return ResponseEntity.ok(summaryMapper.toAlimentoSummaries(alimentoRepository.findAll()));
 		List<Alimento> listAlimentos = alimentoRepository.findByNombreContainingIgnoreCase(partialName);
-		return ResponseEntity.ok(listAlimentos);
+		return ResponseEntity.ok(summaryMapper.toAlimentoSummaries(listAlimentos));
 	}
 
 	@PostMapping("/update")
-	public ResponseEntity<Alimento> updateAlimento(@RequestBody Alimento alimento) {
+	public ResponseEntity<AlimentoSummary> updateAlimento(@RequestBody Alimento alimento) {
 		return alimentoRepository.findById(alimento.getId())
 			.map(_ -> {
 				Alimento updatedAlimento = alimentoRepository.save(alimento);
-				return ResponseEntity.ok(updatedAlimento);
+				return ResponseEntity.ok(summaryMapper.toAlimentoSummary(updatedAlimento));
 			})
 			.orElseGet(() -> ResponseEntity.notFound().build());
 	}
