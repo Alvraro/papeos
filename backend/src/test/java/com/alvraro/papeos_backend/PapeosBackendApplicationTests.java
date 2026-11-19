@@ -116,14 +116,15 @@ class PapeosBackendApplicationTests {
 	}
 
 	@Test
-	void givenAlimentos_whenGetAllAlimentos_thenStatus200() throws Exception {
+	void givenAlimentos_whenSearchAlimentosEmptyBody_thenStatus200() throws Exception {
 		final String nombreAlimento1 = "Nombre alimento test 1";
 		final String nombreAlimento2 = "Nombre alimento test 2";
 		createTestAlimento(nombreAlimento1);
 		createTestAlimento(nombreAlimento2);
 
-		mvc.perform(MockMvcRequestBuilders.post("/alimentos/get-all")
-				.contentType(MediaType.APPLICATION_JSON))
+		mvc.perform(MockMvcRequestBuilders.post("/alimentos/search")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(""))
 			.andExpect(MockMvcResultMatchers.status().isOk())
 			.andExpect(MockMvcResultMatchers.content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
 			.andExpect(MockMvcResultMatchers.jsonPath("$[0].nombre").value(nombreAlimento1))
@@ -131,9 +132,10 @@ class PapeosBackendApplicationTests {
 	}
 
 	@Test
-	void givenAlimentos_whenGetAllAlimentosWithNoAlimentos_thenStatus200AndEmpty() throws Exception {
-		mvc.perform(MockMvcRequestBuilders.post("/alimentos/get-all")
-				.contentType(MediaType.APPLICATION_JSON))
+	void givenAlimentos_whenSearchAlimentosWithNoAlimentos_thenStatus200AndEmpty() throws Exception {
+		mvc.perform(MockMvcRequestBuilders.post("/alimentos/search")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(""))
 			.andExpect(MockMvcResultMatchers.status().isOk())
 			.andExpect(MockMvcResultMatchers.content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
 			.andExpect(MockMvcResultMatchers.jsonPath("$").isEmpty());
@@ -164,7 +166,7 @@ class PapeosBackendApplicationTests {
 	}
 
 	@Test
-	void givenAlimentos_whenSearchAlimentosWithBlankPartialName_thenStatus200AndAllAl() throws Exception {
+	void givenAlimentos_whenSearchAlimentosWithBlankPartialName_thenStatus200() throws Exception {
 		final String nombreAlimento1 = "Nombre alimento test 1";
 		final String nombreAlimento2 = "Nombre alimento test 2";
 		createTestAlimento(nombreAlimento1);
@@ -264,8 +266,9 @@ class PapeosBackendApplicationTests {
 		createTestPlato(nombrePlato1, "Descripcion plato test 1");
 		createTestPlato(nombrePlato2, "Descripcion plato test 2");
 
-		mvc.perform(MockMvcRequestBuilders.post("/platos/get-all")
-				.contentType(MediaType.APPLICATION_JSON))
+		mvc.perform(MockMvcRequestBuilders.post("/platos/search")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(""))
 			.andExpect(MockMvcResultMatchers.status().isOk())
 			.andExpect(MockMvcResultMatchers.content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
 			.andExpect(MockMvcResultMatchers.jsonPath("$[0].nombre").value(nombrePlato1))
@@ -274,15 +277,16 @@ class PapeosBackendApplicationTests {
 
 	@Test
 	void givenPlatos_whenGetAllPlatosWithNoPlatos_thenStatus200AndEmpty() throws Exception {
-		mvc.perform(MockMvcRequestBuilders.post("/platos/get-all")
-				.contentType(MediaType.APPLICATION_JSON))
+		mvc.perform(MockMvcRequestBuilders.post("/platos/search")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content(""))
 			.andExpect(MockMvcResultMatchers.status().isOk())
 			.andExpect(MockMvcResultMatchers.content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
 			.andExpect(MockMvcResultMatchers.jsonPath("$").isEmpty());
 	}
 
 	@Test
-	void givenPlatos_whenSearchPlatos_thenStatus200() throws Exception {
+	void given1Plato_whenSearchPlatos_thenStatus200() throws Exception {
 		final String nombrePlato = "Nombre plato test";
 		Plato plato = createTestPlato(nombrePlato, "Descripcion plato test");
 
@@ -295,6 +299,43 @@ class PapeosBackendApplicationTests {
 			.andExpect(MockMvcResultMatchers.jsonPath("$[0].id").value(plato.getId()));
 	}
 
+	@Test
+	void given2Platos_whenSearchPartialPlatos_thenStatus200And1Plato() throws Exception {
+		final String nombrePlato = "Plato Uno";
+		Plato plato = createTestPlato(nombrePlato, "Descripcion plato1");
+
+		final String nombrePlato2 = "Plato Dos";
+		createTestPlato(nombrePlato2, "Descripcion plato2");
+		
+		mvc.perform(MockMvcRequestBuilders.post("/platos/search")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("U"))
+			.andExpect(MockMvcResultMatchers.status().isOk())
+			.andExpect(MockMvcResultMatchers.content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+			.andExpect(MockMvcResultMatchers.jsonPath("$[0].nombre").value(nombrePlato))
+			.andExpect(MockMvcResultMatchers.jsonPath("$[0].id").value(plato.getId()))
+			.andExpect(MockMvcResultMatchers.jsonPath("$[1]").doesNotExist());
+	}
+	
+	@Test
+	void given2Platos_whenSearchPartialPlatos_thenStatus200And2Platos() throws Exception {
+		final String nombrePlato = "Plato Uno";
+		Plato plato = createTestPlato(nombrePlato, "Descripcion plato1");
+
+		final String nombrePlato2 = "Plato Dos";
+		Plato plato2 = createTestPlato(nombrePlato2, "Descripcion plato2");
+		
+		mvc.perform(MockMvcRequestBuilders.post("/platos/search")
+				.contentType(MediaType.APPLICATION_JSON)
+				.content("P"))
+			.andExpect(MockMvcResultMatchers.status().isOk())
+			.andExpect(MockMvcResultMatchers.content().contentTypeCompatibleWith(MediaType.APPLICATION_JSON))
+			.andExpect(MockMvcResultMatchers.jsonPath("$[0].nombre").value(nombrePlato))
+			.andExpect(MockMvcResultMatchers.jsonPath("$[0].id").value(plato.getId()))
+			.andExpect(MockMvcResultMatchers.jsonPath("$[1].nombre").value(nombrePlato2))
+			.andExpect(MockMvcResultMatchers.jsonPath("$[1].id").value(plato2.getId()));
+	}
+	
 	@Test
 	void givenPlatos_whenSearchPlatosWithNonExistingPartialName_thenStatus200AndEmptyList() throws Exception {
 		mvc.perform(MockMvcRequestBuilders.post("/platos/search")

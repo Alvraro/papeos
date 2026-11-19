@@ -38,13 +38,8 @@ public class PlatoController {
 			.orElseGet(() -> ResponseEntity.notFound().build());
 	}
 
-	@PostMapping("/get-all")
-	public ResponseEntity<List<PlatoSummary>> getAllPlatos() {
-		return ResponseEntity.ok(summaryMapper.toPlatoSummaries(platoRepository.findAll()));
-	}
-
 	@PostMapping("/search")
-	public ResponseEntity<List<PlatoSummary>> findByNombreContainingIgnoreCase(@RequestBody String partialName) {
+	public ResponseEntity<List<PlatoSummary>> findByNombreContainingIgnoreCase(@RequestBody(required = false) String partialName) {
 		if(partialName == null || partialName.isBlank())
 			return ResponseEntity.ok(summaryMapper.toPlatoSummaries(platoRepository.findAll()));
 		return ResponseEntity.ok(summaryMapper.toPlatoSummaries(platoRepository.findByNombreContainingIgnoreCase(partialName)));

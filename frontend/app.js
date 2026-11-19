@@ -19,15 +19,15 @@ const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (character
   "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;"
 }[character]));
 
-async function request(path, { method = "GET", body, query } = {}) {
+async function request(path, { method = "GET", body, query, contentType } = {}) {
   const url = new URL(`${API_BASE}${path}`);
   if (query) Object.entries(query).forEach(([key, value]) => url.searchParams.set(key, value));
   let response;
   try {
     response = await fetch(url, {
       method,
-      headers: body === undefined ? {} : { "Content-Type": "application/json" },
-      body: body === undefined ? undefined : JSON.stringify(body)
+      headers: body === undefined ? {} : { "Content-Type": contentType ?? "application/json" },
+      body: body === undefined ? undefined : contentType ? body : JSON.stringify(body)
     });
   } catch (error) {
     throw new Error("No se pudo conectar con el backend. Comprueba que está iniciado y que permite llamadas desde el navegador.");
@@ -47,13 +47,47 @@ function notifyFailure(error) {
 }
 
 async function loadFoods(search = "") {
-  const result = await request(`${API.foods}/search`, { method: "POST", body: search });
+  const result = await request(`${API.foods}/search`, {
+    method: "POST",
+    body: search.trim(),
+    contentType: "text/plain"
+  });
+  return Array.isArray(result) ? result : [];
+}
+
+async function loadAllFoods() {
+  const result = await request(`${API.foods}/search`, {
+    method: "POST",
+    body: "",
+    contentType: "text/plain"
+  });
   return Array.isArray(result) ? result : [];
 }
 
 async function loadDishes(search = "") {
-  const result = await request(`${API.dishes}/search`, { method: "POST", body: search });
+  const result = await request(`${API.dishes}/search`, {
+    method: "POST",
+    body: search.trim(),
+    contentType: "text/plain"
+  });
   return Array.isArray(result) ? result : [];
+}
+
+async function loadAllDishes() {
+  const result = await request(`${API.dishes}/search`, {
+    method: "POST",
+    body: "",
+    contentType: "text/plain"
+  });
+  return Array.isArray(result) ? result : [];
+}
+
+const suggestionRequestIds = new WeakMap();
+
+function beginSuggestionRequest(input) {
+  const requestId = (suggestionRequestIds.get(input) ?? 0) + 1;
+  suggestionRequestIds.set(input, requestId);
+  return requestId;
 }
 
 function foodName(food) { return food.nombre ?? food.name ?? ""; }
@@ -188,7 +222,7 @@ function showSuggestions(container, items, getName, onChoose, query, createLabel
 function mealPayload(row, dish) {
   return {
     fecha: `${row.dataset.date}T00:00:00.000Z`,
-    tipo: row.dataset.type.toUpperCase(),
+    tipo: row.dataset.type.toLowerCase(),
     platos: [{ id: dishId(dish) }]
   };
 }
@@ -226,15 +260,28 @@ async function choosePlanDish(row, input, suggestions, dish) {
 function wirePlan() {
   byId("previous-week").addEventListener("click", () => changeWeek(-7));
   byId("next-week").addEventListener("click", () => changeWeek(7));
-  byId("weekly-plan").addEventListener("input", (event) => {
+  byId("weekly-plan").addEventListener("input", async (event) => {
     const input = event.target.closest(".meal-input");
     if (!input) return;
+    const requestId = beginSuggestionRequest(input);
     const row = input.closest(".meal-row");
-    showSuggestions(input.nextElementSibling, dishes, dishName, (dish) => choosePlanDish(row, input, input.nextElementSibling, dish), input.value, "plato", true, true);
+    try {
+      const results = await loadDishes(input.value);
+      if (suggestionRequestIds.get(input) !== requestId) return;
+      showSuggestions(input.nextElementSibling, results, dishName, (dish) => choosePlanDish(row, input, input.nextElementSibling, dish), input.value, "plato", true, true);
+    } catch (error) { notifyFailure(error); }
   });
-  byId("weekly-plan").addEventListener("focusin", (event) => {
+  byId("weekly-plan").addEventListener("focusin", async (event) => {
     const input = event.target.closest(".meal-input");
-    if (input) input.dispatchEvent(new Event("input", { bubbles: true }));
+    if (!input) return;
+    const requestId = beginSuggestionRequest(input);
+    const row = input.closest(".meal-row");
+    try {
+      const allDishes = await loadAllDishes();
+      if (suggestionRequestIds.get(input) !== requestId) return;
+      dishes = allDishes;
+      showSuggestions(input.nextElementSibling, dishes, dishName, (dish) => choosePlanDish(row, input, input.nextElementSibling, dish), input.value, "plato", true, true);
+    } catch (error) { notifyFailure(error); }
   });
   byId("weekly-plan").addEventListener("focusout", (event) => {
     if (event.target.matches(".meal-input")) setTimeout(() => {
@@ -250,6 +297,13 @@ function wirePlan() {
     else {
       event.target.value = selectedDishName(mealFor(new Date(`${row.dataset.date}T00:00:00`), row.dataset.type));
     }
+  });
+  byId("weekly-plan").addEventListener("keydown", (event) => {
+    const input = event.target.closest(".meal-input");
+    if (!input || event.key !== "Enter") return;
+    event.preventDefault();
+    const row = input.closest(".meal-row");
+    choosePlanDish(row, input, input.nextElementSibling, null);
   });
   byId("weekly-plan").addEventListener("click", async (event) => {
     const row = event.target.closest(".meal-row");
@@ -307,10 +361,10 @@ function buildDishCard(dish) {
   </article>`;
 }
 
-function renderDishes() {
+function renderDishes(list = dishes) {
   const root = byId("dish-list");
   const query = byId("dish-search")?.value ?? "";
-  const visible = findMatches(dishes, query, dishName);
+  const visible = findMatches(list, query, dishName);
   root.innerHTML = visible.length ? visible.map(buildDishCard).join("") : '<div class="empty-state">No hay platos que coincidan. Usa el buscador para crear uno.</div>';
 }
 
@@ -324,9 +378,7 @@ async function createDish(name) {
 function wireDishSearch() {
   const input = byId("dish-search");
   const menu = byId("dish-suggestions");
-  const update = () => {
-    renderDishes();
-    showSuggestions(menu, dishes, dishName, (dish) => {
+  const selectSuggestion = (dish) => {
     if (!dish) {
       createDish(input.value.trim()).catch(notifyFailure);
     } else {
@@ -335,13 +387,31 @@ function wireDishSearch() {
       renderDishes();
       document.querySelector(`[data-dish-id="${CSS.escape(String(dishId(dish)))}"]`)?.scrollIntoView({ behavior: "smooth", block: "center" });
     }
-    }, input.value, "plato", true);
   };
-  input.addEventListener("focus", update);
+  const update = async () => {
+    const requestId = beginSuggestionRequest(input);
+    try {
+      const results = await loadDishes(input.value);
+      if (suggestionRequestIds.get(input) !== requestId) return;
+      renderDishes(results);
+      showSuggestions(menu, results, dishName, selectSuggestion, input.value, "plato", true);
+    } catch (error) { notifyFailure(error); }
+  };
+  const loadAll = async () => {
+    const requestId = beginSuggestionRequest(input);
+    try {
+      const allDishes = await loadAllDishes();
+      if (suggestionRequestIds.get(input) !== requestId) return;
+      dishes = allDishes;
+      renderDishes();
+      showSuggestions(menu, dishes, dishName, selectSuggestion, input.value, "plato", true);
+    } catch (error) { notifyFailure(error); }
+  };
+  input.addEventListener("focus", loadAll);
   input.addEventListener("input", update);
   input.addEventListener("blur", () => setTimeout(() => { menu.hidden = true; }, 140));
   input.addEventListener("keydown", (event) => {
-    if (event.key === "Enter" && input.value.trim() && !findMatches(dishes, input.value, dishName).length) {
+    if (event.key === "Enter" && input.value.trim()) {
       event.preventDefault();
       createDish(input.value.trim()).catch(notifyFailure);
       menu.hidden = true;
@@ -353,21 +423,43 @@ function wireDishList() {
   const root = byId("dish-list");
   root.addEventListener("keydown", async (event) => {
     const input = event.target.closest(".dish-title");
-    if (!input || event.key !== "Enter") return;
-    event.preventDefault();
-    await saveDishName(input);
+    if (input && event.key === "Enter") {
+      event.preventDefault();
+      await saveDishName(input);
+      return;
+    }
+    const ingredientInput = event.target.closest(".ingredient-input");
+    if (ingredientInput && event.key === "Enter" && ingredientInput.value.trim()) {
+      event.preventDefault();
+      await addFoodToDish(ingredientInput, null);
+      ingredientInput.nextElementSibling.hidden = true;
+    }
   });
   root.addEventListener("focusout", (event) => {
     if (event.target.matches(".dish-title")) saveDishName(event.target);
   });
-  root.addEventListener("input", (event) => {
+  root.addEventListener("input", async (event) => {
     const input = event.target.closest(".ingredient-input");
     if (!input) return;
     const menu = input.nextElementSibling;
-    showSuggestions(menu, foods, foodName, (food) => addFoodToDish(input, food), input.value, "alimento", true, true);
+    const requestId = beginSuggestionRequest(input);
+    try {
+      const results = await loadFoods(input.value);
+      if (suggestionRequestIds.get(input) !== requestId) return;
+      showSuggestions(menu, results, foodName, (food) => addFoodToDish(input, food), input.value, "alimento", true, true);
+    } catch (error) { notifyFailure(error); }
   });
-  root.addEventListener("focusin", (event) => {
-    if (event.target.matches(".ingredient-input")) event.target.dispatchEvent(new Event("input", { bubbles: true }));
+  root.addEventListener("focusin", async (event) => {
+    if (!event.target.matches(".ingredient-input")) return;
+    const input = event.target;
+    const requestId = beginSuggestionRequest(input);
+    try {
+      const allFoods = await loadAllFoods();
+      if (suggestionRequestIds.get(input) !== requestId) return;
+      foods = allFoods;
+      categoriesFromFoods();
+      showSuggestions(input.nextElementSibling, foods, foodName, (food) => addFoodToDish(input, food), input.value, "alimento", true, true);
+    } catch (error) { notifyFailure(error); }
   });
   root.addEventListener("focusout", (event) => {
     if (event.target.matches(".ingredient-input")) setTimeout(() => { event.target.nextElementSibling.hidden = true; }, 140);
@@ -469,19 +561,17 @@ function buildFoodCard(food) {
   </article>`;
 }
 
-function renderFoods() {
+function renderFoods(list = foods) {
   const root = byId("food-list");
   const query = byId("food-search")?.value ?? "";
-  const visible = findMatches(foods, query, foodName);
+  const visible = findMatches(list, query, foodName);
   root.innerHTML = visible.length ? visible.map(buildFoodCard).join("") : '<div class="empty-state">No hay alimentos que coincidan. Usa el buscador para crear uno.</div>';
 }
 
 function wireFoodSearch() {
   const input = byId("food-search");
   const menu = byId("food-suggestions");
-  const update = () => {
-    renderFoods();
-    showSuggestions(menu, foods, foodName, (food) => {
+  const selectSuggestion = (food) => {
     if (!food) createFood(input.value.trim()).catch(notifyFailure);
     else {
       input.value = foodName(food);
@@ -489,13 +579,32 @@ function wireFoodSearch() {
       renderFoods();
       document.querySelector(`[data-food-id="${CSS.escape(String(foodId(food)))}"]`)?.scrollIntoView({ behavior: "smooth", block: "center" });
     }
-    }, input.value, "alimento", true);
   };
-  input.addEventListener("focus", update);
+  const update = async () => {
+    const requestId = beginSuggestionRequest(input);
+    try {
+      const results = await loadFoods(input.value);
+      if (suggestionRequestIds.get(input) !== requestId) return;
+      renderFoods(results);
+      showSuggestions(menu, results, foodName, selectSuggestion, input.value, "alimento", true);
+    } catch (error) { notifyFailure(error); }
+  };
+  const loadAll = async () => {
+    const requestId = beginSuggestionRequest(input);
+    try {
+      const allFoods = await loadAllFoods();
+      if (suggestionRequestIds.get(input) !== requestId) return;
+      foods = allFoods;
+      categoriesFromFoods();
+      renderFoods();
+      showSuggestions(menu, foods, foodName, selectSuggestion, input.value, "alimento", true);
+    } catch (error) { notifyFailure(error); }
+  };
+  input.addEventListener("focus", loadAll);
   input.addEventListener("input", update);
   input.addEventListener("blur", () => setTimeout(() => { menu.hidden = true; }, 140));
   input.addEventListener("keydown", (event) => {
-    if (event.key === "Enter" && input.value.trim() && !findMatches(foods, input.value, foodName).length) {
+    if (event.key === "Enter" && input.value.trim()) {
       event.preventDefault();
       createFood(input.value.trim()).catch(notifyFailure);
       menu.hidden = true;
@@ -606,7 +715,7 @@ async function createFoodRecord(name) {
 
 async function initializePlan() {
   try {
-    [dishes, meals] = await Promise.all([loadDishes(), loadMealsForWeek()]);
+    [dishes, meals] = await Promise.all([loadAllDishes(), loadMealsForWeek()]);
     wirePlan();
     renderPlan();
   } catch (error) {
@@ -617,7 +726,7 @@ async function initializePlan() {
 
 async function initializeDishes() {
   try {
-    [dishes, foods] = await Promise.all([loadDishes(), loadFoods()]);
+    [dishes, foods] = await Promise.all([loadAllDishes(), loadAllFoods()]);
     renderDishes();
     wireDishSearch();
     wireDishList();
@@ -629,7 +738,7 @@ async function initializeDishes() {
 
 async function initializeFoods() {
   try {
-    foods = await loadFoods();
+    foods = await loadAllFoods();
     categoriesFromFoods();
     byId("food-types").innerHTML = categoriesFromFoods().map((category) => `<option value="${escapeHtml(category.nombre)}"></option>`).join("");
     renderFoods();

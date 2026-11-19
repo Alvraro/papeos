@@ -43,11 +43,6 @@ public class AlimentoController {
 			.orElseGet(() -> ResponseEntity.notFound().build());
 	}
 
-	@PostMapping("/get-all")
-	public ResponseEntity<List<AlimentoSummary>> getAllAlimentos() {
-		return ResponseEntity.ok(summaryMapper.toAlimentoSummaries(alimentoRepository.findAll()));
-	}
-	
 	@PostMapping("/search")
 	public ResponseEntity<List<AlimentoSummary>> findByNombreContainingIgnoreCase(@RequestBody(required = false) String partialName) {
 		if(partialName == null || partialName.isBlank())

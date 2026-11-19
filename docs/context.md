@@ -42,6 +42,7 @@ Crea cada una de las páginas que componen el Frontend de la Web: Plan, platos y
     2. Arriba a la derecha hay un cuadro de texto que sirve de filtro para búsquedas parciales por nombre de alimento. Similar al de la página Plan, al cambiar el foco al cuadro deben salir como sugerencias seleccionables en un menú desplegable los alimentos de cuyo nombre el texto sea coincidencia parcial ignorando mayúsculas. Si no hay coincidencias, el desplegable debe contener una opción con un icono para añadir alimento nuevo (e.g. un "+"), que tendrá como nombre el contenido actual del cuadro de texto
     3. Cada alimento se muestra en un bloque con una primera fila con el nombre del alimento y su tipo, editable al clickear sobre él y se guardará en base de datos
     4. Al final de cada fila de alimento hay un icono de "x" para borrar el alimento
+- Comportamiento común de los cuadros de búsqueda de platos y alimentos: al recibir el foco consultan todos los datos mediante el endpoint `search` con una cadena vacía; cada pulsación busca coincidencias parciales por nombre en el API mediante `search`; al pulsar Enter se intenta crear un plato o alimento con el texto escrito, incluso si hay coincidencias.
 ## Restricciones y reglas
 - Avisa al usuario si una operación no se ha podido realizar en la base de datos, sin actualizar la interfaz.
 Técnicas:
@@ -51,6 +52,7 @@ Técnicas:
 - No añadas nada que no aparezca en este mensaje.
 - Diseño limpio y moderno, que se vea bien en el móvil.
 - Todos los textos de la interfaz en español.
+- Cualquier cambio a las especificaciones debe reflejarase en este documento y ser aprobado por mí antes de implementarlo.
 ## Formato de salida
 1. Crea los archivos en la carpeta "frontend" del proyecto.
 2. Al terminar, responde con:
