@@ -83,6 +83,7 @@ async function loadAllDishes() {
 }
 
 const suggestionRequestIds = new WeakMap();
+const pendingMealSelections = new WeakSet();
 
 function beginSuggestionRequest(input) {
   const requestId = (suggestionRequestIds.get(input) ?? 0) + 1;
@@ -244,6 +245,8 @@ async function saveMeal(row, dish) {
 }
 
 async function choosePlanDish(row, input, suggestions, dish) {
+  if (pendingMealSelections.has(row)) return;
+  pendingMealSelections.add(row);
   try {
     let selected = dish;
     if (!selected) {
@@ -256,6 +259,7 @@ async function choosePlanDish(row, input, suggestions, dish) {
   } catch (error) {
     notifyFailure(error);
   } finally {
+    pendingMealSelections.delete(row);
     suggestions.hidden = true;
   }
 }
