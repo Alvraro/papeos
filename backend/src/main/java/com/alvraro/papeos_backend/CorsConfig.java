@@ -19,6 +19,7 @@ public class CorsConfig {
                                 "http://localhost:80",
                                 "http://127.0.0.1",
                                 "http://127.0.0.1:80",
+                                "http://127.0.0.1:5500",
                                 "null"
                         )
                         .allowedMethods("GET", "POST", "PUT", "DELETE", "OPTIONS")
