@@ -195,29 +195,86 @@ function findMatches(list, query, getName) {
   return list.filter((item) => getName(item).toLocaleLowerCase("es").includes(normalized));
 }
 
-function showSuggestions(container, items, getName, onChoose, query, createLabel, allowCreate, createAlways = false) {
+function findExactMatch(list, query, getName) {
+  const normalized = query.trim().toLocaleLowerCase("es");
+  if (!normalized) return null;
+  return list.find((item) => getName(item).trim().toLocaleLowerCase("es") === normalized) ?? null;
+}
+
+function setActiveSuggestion(container, index) {
+  const options = [...container.querySelectorAll(".suggestion-option")];
+  if (!options.length) return;
+  const activeIndex = (index + options.length) % options.length;
+  options.forEach((option, optionIndex) => {
+    const active = optionIndex === activeIndex;
+    option.classList.toggle("is-active", active);
+    option.setAttribute("aria-selected", String(active));
+  });
+  container.dataset.activeIndex = String(activeIndex);
+  options[activeIndex].scrollIntoView({ block: "nearest" });
+}
+
+function handleSuggestionKeydown(event, container) {
+  if (event.key === "Escape" && !container.hidden) {
+    container.hidden = true;
+    container.dataset.activeIndex = "-1";
+    event.preventDefault();
+    return true;
+  }
+  if (container.hidden) return false;
+  const options = [...container.querySelectorAll(".suggestion-option")];
+  if (!options.length) return false;
+  const activeIndex = Number(container.dataset.activeIndex ?? -1);
+  if (event.key === "ArrowDown" || event.key === "ArrowUp") {
+    const direction = event.key === "ArrowDown" ? 1 : -1;
+    setActiveSuggestion(container, activeIndex < 0
+      ? (direction > 0 ? 0 : options.length - 1)
+      : activeIndex + direction);
+    event.preventDefault();
+    return true;
+  }
+  if (event.key === "Enter" && options[activeIndex]) {
+    event.preventDefault();
+    options[activeIndex].click();
+    return true;
+  }
+  return false;
+}
+
+function showSuggestions(container, items, getName, onChoose, query, createLabel, allowCreate) {
   const matches = findMatches(items, query, getName);
+  const exactMatch = findExactMatch(matches, query, getName);
   const options = matches.map((item, index) =>
-    `<button class="suggestion-option" type="button" role="option" data-option-index="${index}">${escapeHtml(getName(item))}</button>`
+    `<button class="suggestion-option" type="button" role="option" aria-selected="false" data-option-index="${index}">${escapeHtml(getName(item))}</button>`
   );
-  if (allowCreate && query.trim() && (createAlways || !matches.length)) {
-    options.push(`<button class="suggestion-option create-option" type="button" role="option" data-create="true"><span class="plus-mark">+</span> Crear ${createLabel} «${escapeHtml(query.trim())}»</button>`);
+  if (allowCreate && query.trim() && !exactMatch) {
+    options.push(`<button class="suggestion-option create-option" type="button" role="option" aria-selected="false" data-create="true"><span class="plus-mark">+</span> Crear ${createLabel} «${escapeHtml(query.trim())}»</button>`);
   }
   if (!options.length) {
     container.hidden = true;
+    container.dataset.activeIndex = "-1";
     return;
   }
   container.innerHTML = options.join("");
   container.hidden = false;
+  container.dataset.activeIndex = "-1";
   container.querySelectorAll("[data-option-index]").forEach((button) => {
     button.addEventListener("mousedown", (event) => event.preventDefault());
-    button.addEventListener("click", () => onChoose(matches[Number(button.dataset.optionIndex)]));
+    button.addEventListener("click", () => {
+      container.hidden = true;
+      onChoose(matches[Number(button.dataset.optionIndex)]);
+    });
   });
   const createButton = container.querySelector("[data-create]");
   if (createButton) {
     createButton.addEventListener("mousedown", (event) => event.preventDefault());
-    createButton.addEventListener("click", () => onChoose(null));
+    createButton.addEventListener("click", () => {
+      container.hidden = true;
+      onChoose(null);
+    });
   }
+  if (exactMatch) setActiveSuggestion(container, matches.indexOf(exactMatch));
+  else if (createButton) setActiveSuggestion(container, matches.length);
 }
 
 function mealPayload(row, dish) {
@@ -252,8 +309,11 @@ async function choosePlanDish(row, input, suggestions, dish) {
     if (!selected) {
       const name = input.value.trim();
       if (!name) return;
-      selected = await request(`${API.dishes}/create`, { method: "POST", body: { nombre: name, descripcion: "" } });
-      dishes = [...dishes, selected];
+      selected = findExactMatch(dishes, name, dishName);
+      if (!selected) {
+        selected = await request(`${API.dishes}/create`, { method: "POST", body: { nombre: name, descripcion: "" } });
+        dishes = [...dishes, selected];
+      }
     }
     await saveMeal(row, selected);
   } catch (error) {
@@ -275,7 +335,7 @@ function wirePlan() {
     try {
       const results = await loadDishes(input.value);
       if (suggestionRequestIds.get(input) !== requestId) return;
-      showSuggestions(input.nextElementSibling, results, dishName, (dish) => choosePlanDish(row, input, input.nextElementSibling, dish), input.value, "plato", true, true);
+      showSuggestions(input.nextElementSibling, results, dishName, (dish) => choosePlanDish(row, input, input.nextElementSibling, dish), input.value, "plato", true);
     } catch (error) { notifyFailure(error); }
   });
   byId("weekly-plan").addEventListener("focusin", async (event) => {
@@ -287,7 +347,7 @@ function wirePlan() {
       const allDishes = await loadAllDishes();
       if (suggestionRequestIds.get(input) !== requestId) return;
       dishes = allDishes;
-      showSuggestions(input.nextElementSibling, dishes, dishName, (dish) => choosePlanDish(row, input, input.nextElementSibling, dish), input.value, "plato", true, true);
+      showSuggestions(input.nextElementSibling, dishes, dishName, (dish) => choosePlanDish(row, input, input.nextElementSibling, dish), input.value, "plato", true);
     } catch (error) { notifyFailure(error); }
   });
   byId("weekly-plan").addEventListener("focusout", (event) => {
@@ -307,10 +367,12 @@ function wirePlan() {
   });
   byId("weekly-plan").addEventListener("keydown", (event) => {
     const input = event.target.closest(".meal-input");
-    if (!input || event.key !== "Enter") return;
+    if (!input) return;
+    if (handleSuggestionKeydown(event, input.nextElementSibling)) return;
+    if (event.key !== "Enter") return;
     event.preventDefault();
     const row = input.closest(".meal-row");
-    choosePlanDish(row, input, input.nextElementSibling, null);
+    choosePlanDish(row, input, input.nextElementSibling, findExactMatch(dishes, input.value, dishName));
   });
   byId("weekly-plan").addEventListener("click", async (event) => {
     const row = event.target.closest(".meal-row");
@@ -387,7 +449,9 @@ function wireDishSearch() {
   const menu = byId("dish-suggestions");
   const selectSuggestion = (dish) => {
     if (!dish) {
-      createDish(input.value.trim()).catch(notifyFailure);
+      const existing = findExactMatch(dishes, input.value, dishName);
+      if (existing) selectSuggestion(existing);
+      else createDish(input.value.trim()).catch(notifyFailure);
     } else {
       input.value = dishName(dish);
       menu.hidden = true;
@@ -418,9 +482,10 @@ function wireDishSearch() {
   input.addEventListener("input", update);
   input.addEventListener("blur", () => setTimeout(() => { menu.hidden = true; }, 140));
   input.addEventListener("keydown", (event) => {
+    if (handleSuggestionKeydown(event, menu)) return;
     if (event.key === "Enter" && input.value.trim()) {
       event.preventDefault();
-      createDish(input.value.trim()).catch(notifyFailure);
+      selectSuggestion(findExactMatch(dishes, input.value, dishName));
       menu.hidden = true;
     }
   });
@@ -436,6 +501,7 @@ function wireDishList() {
       return;
     }
     const ingredientInput = event.target.closest(".ingredient-input");
+    if (ingredientInput && handleSuggestionKeydown(event, ingredientInput.nextElementSibling)) return;
     if (ingredientInput && event.key === "Enter" && ingredientInput.value.trim()) {
       event.preventDefault();
       await addFoodToDish(ingredientInput, null);
@@ -453,7 +519,7 @@ function wireDishList() {
     try {
       const results = await loadFoods(input.value);
       if (suggestionRequestIds.get(input) !== requestId) return;
-      showSuggestions(menu, results, foodName, (food) => addFoodToDish(input, food), input.value, "alimento", true, true);
+      showSuggestions(menu, results, foodName, (food) => addFoodToDish(input, food), input.value, "alimento", true);
     } catch (error) { notifyFailure(error); }
   });
   root.addEventListener("focusin", async (event) => {
@@ -465,7 +531,7 @@ function wireDishList() {
       if (suggestionRequestIds.get(input) !== requestId) return;
       foods = allFoods;
       categoriesFromFoods();
-      showSuggestions(input.nextElementSibling, foods, foodName, (food) => addFoodToDish(input, food), input.value, "alimento", true, true);
+      showSuggestions(input.nextElementSibling, foods, foodName, (food) => addFoodToDish(input, food), input.value, "alimento", true);
     } catch (error) { notifyFailure(error); }
   });
   root.addEventListener("focusout", (event) => {
@@ -526,9 +592,12 @@ async function addFoodToDish(input, food) {
     if (!selected) {
       const name = input.value.trim();
       if (!name) return;
-      selected = await createFoodRecord(name);
-      if (!selected) return;
-      createdFood = selected;
+      selected = findExactMatch(foods, name, foodName);
+      if (!selected) {
+        selected = await createFoodRecord(name);
+        if (!selected) return;
+        createdFood = selected;
+      }
     }
     const dish = dishes.find((item) => String(dishId(item)) === card.dataset.dishId);
     const updated = await request(`${API.dishes}/update`, {
@@ -579,7 +648,11 @@ function wireFoodSearch() {
   const input = byId("food-search");
   const menu = byId("food-suggestions");
   const selectSuggestion = (food) => {
-    if (!food) createFood(input.value.trim()).catch(notifyFailure);
+    if (!food) {
+      const existing = findExactMatch(foods, input.value, foodName);
+      if (existing) selectSuggestion(existing);
+      else createFood(input.value.trim()).catch(notifyFailure);
+    }
     else {
       input.value = foodName(food);
       menu.hidden = true;
@@ -611,9 +684,10 @@ function wireFoodSearch() {
   input.addEventListener("input", update);
   input.addEventListener("blur", () => setTimeout(() => { menu.hidden = true; }, 140));
   input.addEventListener("keydown", (event) => {
+    if (handleSuggestionKeydown(event, menu)) return;
     if (event.key === "Enter" && input.value.trim()) {
       event.preventDefault();
-      createFood(input.value.trim()).catch(notifyFailure);
+      selectSuggestion(findExactMatch(foods, input.value, foodName));
       menu.hidden = true;
     }
   });
