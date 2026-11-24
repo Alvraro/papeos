@@ -1,11 +1,12 @@
 services:
-   mariadb:
-      image: 'mariadb:lts'
-      environment:
-         - MYSQL_DATABASE=papeos
-         - MYSQL_USER=papeos
-         - MYSQL_PASSWORD=papeos666
-      volumes:
-         - ..\mysql-data:/var/lib/mysql
-      ports:
-         - 3306:3306
+    mariadb:
+        image: "mariadb:lts"
+        environment:
+            - MYSQL_DATABASE=papeos
+            - MYSQL_USER=papeos
+            - MYSQL_PASSWORD=papeos666
+        volumes:
+            - "../mysql-data:/var/lib/mysql"
+            - "../mysql-log:/var/log/mysql"
+        ports:
+            - 3306:3306
